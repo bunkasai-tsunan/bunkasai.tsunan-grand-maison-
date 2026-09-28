@@ -1,0 +1,6 @@
+{
+  "name": "グランメゾン津南 - 文化祭 注文・呼び出し・POSシステム",
+  "description": "学校の文化祭「グランメゾン津南」のための注文・呼び出し・在庫・会計管理システム",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
