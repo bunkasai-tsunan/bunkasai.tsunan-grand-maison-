@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem, ToppingOption, Order, OrderStatus, StoreSettings } from '../types/store';
 import { store } from '../lib/store';
+import { getSupabaseUrlAndKey, saveSupabaseConfig } from '../lib/supabaseClient';
 import {
   ChefHat,
   Receipt,
@@ -13,7 +14,10 @@ import {
   RefreshCw,
   Sliders,
   Database,
-  Users
+  Users,
+  Key,
+  Check,
+  Link
 } from 'lucide-react';
 
 interface KitchenViewProps {
@@ -42,6 +46,12 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
   // Settings State
   const [pinInput, setPinInput] = useState<string>(settings.pinCode);
 
+  // Supabase Credentials Config
+  const initialSupabaseConfig = getSupabaseUrlAndKey();
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState<string>(initialSupabaseConfig.url);
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState<string>(initialSupabaseConfig.key);
+  const [supabaseSavedSuccess, setSupabaseSavedSuccess] = useState<boolean>(false);
+
   const activeOrders = orders.filter((o) => {
     if (orderFilter === 'active') return o.status !== 'completed';
     if (orderFilter === 'all') return true;
@@ -65,6 +75,13 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
   const handleCompletePos = (order: Order) => {
     store.completePayment(order.id, cashReceived);
     setShowReceipt(true);
+  };
+
+  const handleSaveSupabaseConfig = () => {
+    saveSupabaseConfig(supabaseUrlInput, supabaseKeyInput);
+    setSupabaseSavedSuccess(true);
+    setTimeout(() => setSupabaseSavedSuccess(false), 2500);
+    store.updateSettings({});
   };
 
   return (
@@ -146,7 +163,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
-            <span>設定</span>
+            <span>設定・DB接続</span>
           </button>
         </div>
       </div>
@@ -155,7 +172,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
       {activeTab === 'orders' && (
         <div className="space-y-6">
           
-          {/* Order Filter Bar */}
           <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
             <div className="flex items-center gap-2 overflow-x-auto">
               {[
@@ -184,7 +200,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             </div>
           </div>
 
-          {/* Orders Cards Grid */}
           {activeOrders.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-3xl py-16 text-center text-slate-400 space-y-2 shadow-xs">
               <Clock className="w-8 h-8 mx-auto text-slate-300" />
@@ -204,7 +219,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                       : 'border-slate-200'
                   }`}
                 >
-                  {/* Card Header */}
                   <div className="flex items-start justify-between border-b border-slate-200 pb-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -224,7 +238,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                       </p>
                     </div>
 
-                    {/* Status badge */}
                     <div>
                       {order.status === 'unread' && (
                         <span className="px-3 py-1 bg-rose-600 text-white font-black text-xs rounded-full shadow-xs animate-pulse">
@@ -244,7 +257,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Order Items List */}
                   <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="space-y-0.5 text-xs">
@@ -261,7 +273,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                     ))}
                   </div>
 
-                  {/* Total & Action */}
                   <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-mono block">TOTAL</span>
@@ -384,7 +395,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             </div>
           </div>
 
-          {/* Toppings / Options Stock */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
@@ -450,7 +460,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
       {activeTab === 'pos' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-200">
           
-          {/* Unpaid Orders Selector */}
           <div className="lg:col-span-5 space-y-4">
             <h3 className="text-base font-black text-slate-900 flex items-center justify-between">
               <span>未会計の注文一覧</span>
@@ -499,7 +508,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             </div>
           </div>
 
-          {/* POS Payment Calculator */}
           <div className="lg:col-span-7">
             {selectedPosOrder ? (
               <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
@@ -516,7 +524,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                   </span>
                 </div>
 
-                {/* Items Table */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                   {selectedPosOrder.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs">
@@ -538,7 +545,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                   </div>
                 </div>
 
-                {/* Cash Received Inputs */}
                 <div className="space-y-3">
                   <label className="block text-xs font-bold text-slate-700">
                     お預かり金額 (受け取り金額)
@@ -554,7 +560,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                     />
                   </div>
 
-                  {/* Quick cash buttons */}
                   <div className="grid grid-cols-4 gap-2">
                     {[selectedPosOrder.total_price, 500, 1000, 5000].map((amt) => (
                       <button
@@ -568,7 +573,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                   </div>
                 </div>
 
-                {/* Change calculation */}
                 <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-mono text-slate-500 uppercase font-bold">CHANGE AMOUNT</span>
@@ -605,17 +609,83 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: SETTINGS */}
+      {/* TAB 4: SETTINGS & SUPABASE CONFIG */}
       {activeTab === 'settings' && (
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-200">
           
+          {/* Supabase Connection Setup Panel */}
+          <div className="bg-white border border-emerald-300 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl font-bold">
+                  <Link className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Supabase データベース接続設定</h3>
+                  <p className="text-xs text-slate-500">ステップ2でコピーしたURLとAnon Keyを入力すると実データ同期します</p>
+                </div>
+              </div>
+              <button
+                onClick={onOpenSqlModal}
+                className="text-xs text-emerald-700 hover:text-emerald-900 underline font-bold"
+              >
+                SQLを見る
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  1. Supabase Project URL
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://your-project.supabase.co"
+                  value={supabaseUrlInput}
+                  onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono text-xs rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-black outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  2. Supabase Anon API Key
+                </label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOiJIUzI1NiIsIn..."
+                  value={supabaseKeyInput}
+                  onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono text-xs rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-black outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={handleSaveSupabaseConfig}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 transition-all"
+                >
+                  <Key className="w-4 h-4" />
+                  <span>Supabase接続設定を保存＆同期開始</span>
+                </button>
+
+                {supabaseSavedSuccess && (
+                  <span className="text-xs text-emerald-700 font-black flex items-center gap-1 animate-pulse">
+                    <Check className="w-4 h-4" />
+                    <span>保存＆接続完了！</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Store PIN & Reset Settings */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-4">
               <Settings className="w-5 h-5 text-slate-900" />
               <span>グランメゾン津南 システム設定</span>
             </h3>
 
-            {/* PIN Code update */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">
                 店員用画面・卓変更アクセス用 暗証番号 (PIN)
@@ -638,7 +708,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
               <p className="text-[11px] text-slate-400">※初期暗証番号: 1234</p>
             </div>
 
-            {/* Chime Toggle */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-200">
               <div>
                 <span className="text-sm font-bold text-slate-900 block">注文受信チャイム音</span>
@@ -652,7 +721,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
               />
             </div>
 
-            {/* Reset Data */}
             <div className="pt-6 border-t border-slate-200 space-y-2">
               <span className="text-xs font-bold text-rose-600 block">データの初期化</span>
               <p className="text-xs text-slate-500">

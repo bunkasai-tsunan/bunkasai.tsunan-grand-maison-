@@ -1,25 +1,45 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-let customSupabaseClient: SupabaseClient | null = null;
+let supabaseInstance: SupabaseClient | null = null;
 
-export const getSupabaseClient = (url?: string, key?: string): SupabaseClient | null => {
-  const supabaseUrl = url || import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = key || import.meta.env.VITE_SUPABASE_ANON_KEY;
+export const getSupabaseUrlAndKey = () => {
+  const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-  if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'MY_SUPABASE_URL') {
-    if (!customSupabaseClient) {
-      customSupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  const localUrl = typeof window !== 'undefined' ? localStorage.getItem('gm_supabase_url') || '' : '';
+  const localKey = typeof window !== 'undefined' ? localStorage.getItem('gm_supabase_anon_key') || '' : '';
+
+  return {
+    url: localUrl || envUrl,
+    key: localKey || envKey,
+  };
+};
+
+export const getSupabaseClient = (): SupabaseClient | null => {
+  const { url, key } = getSupabaseUrlAndKey();
+
+  if (url && key && url !== 'MY_SUPABASE_URL' && url.startsWith('http')) {
+    if (!supabaseInstance) {
+      try {
+        supabaseInstance = createClient(url, key);
+      } catch (e) {
+        console.error('Failed to initialize Supabase client:', e);
+        return null;
+      }
     }
-    return customSupabaseClient;
+    return supabaseInstance;
   }
   return null;
 };
 
-export const resetSupabaseClient = (url: string, key: string) => {
-  if (url && key) {
-    customSupabaseClient = createClient(url, key);
-    return customSupabaseClient;
+export const saveSupabaseConfig = (url: string, key: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('gm_supabase_url', url.trim());
+    localStorage.setItem('gm_supabase_anon_key', key.trim());
+    if (url && key && url.startsWith('http')) {
+      supabaseInstance = createClient(url.trim(), key.trim());
+    } else {
+      supabaseInstance = null;
+    }
   }
-  customSupabaseClient = null;
-  return null;
 };

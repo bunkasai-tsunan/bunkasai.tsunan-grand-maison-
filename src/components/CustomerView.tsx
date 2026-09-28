@@ -125,7 +125,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const totalCartPrice = cart.reduce((sum, c) => sum + c.subtotal, 0);
 
   // Submit Order
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (cart.length === 0) return;
 
     const formattedItems = cart.map((c) => ({
@@ -135,7 +135,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
       subtotal: c.subtotal,
     }));
 
-    const newOrder = store.createOrder(tableNumber, guestCount, formattedItems);
+    const newOrder = await store.createOrder(tableNumber, guestCount, formattedItems);
     setActiveTicket(newOrder);
     setCart([]);
     setStep('ticket_status');
