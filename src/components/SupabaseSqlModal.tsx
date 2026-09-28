@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Check, Copy, X } from 'lucide-react';
+import { Database, Check, Copy, X, ShieldAlert } from 'lucide-react';
 
 interface SupabaseSqlModalProps {
   isOpen: boolean;
@@ -18,9 +18,16 @@ export const SupabaseSqlModal: React.FC<SupabaseSqlModalProps> = ({
   const sqlCode = `-- ==========================================
 -- グランメゾン津南 (文化祭システム)
 -- Supabase PostgreSQL データベース構築用 SQL クエリ
+-- (※RLS無効化＆Realtime許可付き 完全版)
 -- ==========================================
 
--- 1. メニューテーブル (menu)
+-- 1. 既存のテーブルがあれば削除 (クリーン再作成用)
+DROP TABLE IF EXISTS public.order_details CASCADE;
+DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.toppings CASCADE;
+DROP TABLE IF EXISTS public.menu CASCADE;
+
+-- 2. メニューテーブル (menu)
 CREATE TABLE public.menu (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -33,7 +40,7 @@ CREATE TABLE public.menu (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. トッピング・オプションテーブル (toppings)
+-- 3. トッピング・オプションテーブル (toppings)
 CREATE TABLE public.toppings (
   id TEXT PRIMARY KEY,
   menu_id TEXT REFERENCES public.menu(id) ON DELETE CASCADE,
@@ -44,7 +51,7 @@ CREATE TABLE public.toppings (
   category TEXT NOT NULL CHECK (category IN ('cream', 'topping'))
 );
 
--- 3. 注文テーブル (orders)
+-- 4. 注文テーブル (orders)
 CREATE TABLE public.orders (
   id TEXT PRIMARY KEY,
   ticket_number TEXT NOT NULL, -- 例: #001
@@ -55,29 +62,22 @@ CREATE TABLE public.orders (
   is_paid BOOLEAN DEFAULT false,
   cash_received INTEGER DEFAULT 0,
   change_amount INTEGER DEFAULT 0,
+  items_json JSONB DEFAULT '[]'::jsonb, -- 注文商品の内訳リスト
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 4. 注文詳細テーブル (order_details)
-CREATE TABLE public.order_details (
-  id TEXT PRIMARY KEY,
-  order_id TEXT REFERENCES public.orders(id) ON DELETE CASCADE,
-  menu_id TEXT REFERENCES public.menu(id),
-  menu_name TEXT NOT NULL,
-  price INTEGER NOT NULL,
-  quantity INTEGER DEFAULT 1,
-  options JSONB DEFAULT '{}'::jsonb, -- { "cream": "あり", "topping": "あり" }
-  subtotal INTEGER NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- 5. 【重要】誰でも注文・読み書きできるよう Row Level Security (RLS) を無効化
+ALTER TABLE public.menu DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.toppings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;
 
--- 5. Supabase Realtime の有効化
+-- 6. Supabase Realtime (リアルタイム通信) の有効化
 ALTER PUBLICATION supabase_realtime ADD TABLE public.menu;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.toppings;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 
--- 6. 初期サンプルの投入 (グランメゾン津南)
+-- 7. 初期サンプルデータの投入 (グランメゾン津南)
 INSERT INTO public.menu (id, name, price, is_sold_out, stock, category, description)
 VALUES 
   ('m1', 'カヌレ・ワッフルセット', 400, false, 50, 'main', '外はカリッと中はもちもちのカヌレと、焼きたてサクサクのワッフルセット。'),
@@ -102,14 +102,16 @@ export default function BunkasaiPage() {
   const [orders, setOrders] = useState([]);
 
   useEffect(() => {
-    // 初回データ取得
-    supabase.from('orders').select('*').then(({ data }) => setOrders(data || []));
+    // 注文一覧の初期取得
+    supabase.from('orders').select('*').order('created_at', { ascending: false }).then(({ data }) => setOrders(data || []));
 
-    // Supabase Realtime リアルタイム購読
+    // Supabase Realtime リアルタイム自動受信
     const channel = supabase
-      .channel('orders_realtime')
+      .channel('public:orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-        console.log('リアルタイム更新受信:', payload);
+        console.log('リアルタイム更新検知:', payload);
+        // 再取得
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).then(({ data }) => setOrders(data || []));
       })
       .subscribe();
 
@@ -144,10 +146,10 @@ export default function BunkasaiPage() {
             </div>
             <div>
               <h3 className="text-base font-black text-slate-900">
-                Supabase SQL クエリ & Next.js 実装コード
+                Supabase SQL クエリ (RLS許可・Realtime完全対応版)
               </h3>
               <p className="text-xs text-slate-500">
-                Supabase SQL Editorでそのまま実行可能なテーブル設計コード
+                Supabase SQL Editorで全選択して「Run」を実行するコード
               </p>
             </div>
           </div>
@@ -160,8 +162,14 @@ export default function BunkasaiPage() {
           </button>
         </div>
 
+        {/* Notice Bar */}
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center gap-2 text-xs text-amber-900 font-bold">
+          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>重要: Supabaseはデフォルトで書き込みをブロックする(RLS)設定になっています。このSQLを実行すると書き込みアクセスが許可され、注文が接続されます！</span>
+        </div>
+
         {/* Tab Buttons */}
-        <div className="flex items-center px-6 pt-4 gap-2 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center px-6 pt-3 gap-2 border-b border-slate-200 bg-slate-50">
           <button
             onClick={() => setTab('sql')}
             className={`px-4 py-2 font-bold text-xs rounded-t-xl transition-all ${
@@ -170,7 +178,7 @@ export default function BunkasaiPage() {
                 : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Supabase SQL Schema
+            1. Supabase SQL (再実行用)
           </button>
           <button
             onClick={() => setTab('nextjs')}
@@ -180,16 +188,15 @@ export default function BunkasaiPage() {
                 : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Next.js (App Router) 実装例
+            2. Next.js コード構造
           </button>
         </div>
 
         {/* Code View */}
         <div className="p-6 overflow-y-auto flex-1 font-mono text-xs bg-slate-900 text-slate-100 relative">
-          
           <button
             onClick={() => handleCopy(tab === 'sql' ? sqlCode : nextJsCode)}
-            className="absolute top-8 right-8 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+            className="absolute top-8 right-8 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md z-10"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'コピー完了' : 'コードをコピー'}</span>

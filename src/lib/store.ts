@@ -131,6 +131,7 @@ export class LocalStoreManager {
   private listeners: Set<() => void> = new Set();
   private ticketCounter: number;
   private isSupabaseSubscribed: boolean = false;
+  public lastSupabaseError: string | null = null;
 
   constructor() {
     this.menu = this.load('gm_menu', INITIAL_MENU);
@@ -300,7 +301,7 @@ export class LocalStoreManager {
     }
 
     // Insert into Supabase if connected
-    this.syncOrderToSupabase(newOrder);
+    await this.syncOrderToSupabase(newOrder);
 
     this.notify();
     return newOrder;
@@ -319,7 +320,7 @@ export class LocalStoreManager {
     });
 
     this.save('gm_orders', this.orders);
-    this.updateOrderStatusInSupabase(orderId, nextStatus);
+    await this.updateOrderStatusInSupabase(orderId, nextStatus);
     this.notify();
   }
 
@@ -340,13 +341,14 @@ export class LocalStoreManager {
     });
 
     this.save('gm_orders', this.orders);
-    this.updateOrderStatusInSupabase(orderId, 'completed', true, cashReceived);
+    await this.updateOrderStatusInSupabase(orderId, 'completed', true, cashReceived);
     this.notify();
   }
 
   updateSettings(newSettings: Partial<StoreSettings>) {
     this.settings = { ...this.settings, ...newSettings };
     this.save('gm_settings', this.settings);
+    this.isSupabaseSubscribed = false;
     this.initSupabaseSync();
     this.notify();
   }
@@ -367,107 +369,135 @@ export class LocalStoreManager {
   }
 
   // --- SUPABASE REALTIME SYNC ENGINE ---
-  private async initSupabaseSync() {
+  public async initSupabaseSync() {
     const client = getSupabaseClient();
-    if (!client || this.isSupabaseSubscribed) return;
+    if (!client) return;
 
     try {
+      this.lastSupabaseError = null;
+
       // Initial fetch from Supabase
-      const { data: dbOrders } = await client
+      const { data: dbOrders, error: fetchError } = await client
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false });
 
+      if (fetchError) {
+        this.lastSupabaseError = `Supabase 取得エラー: ${fetchError.message} (${fetchError.code})`;
+        console.error(this.lastSupabaseError);
+        this.notify();
+        return;
+      }
+
       if (dbOrders && dbOrders.length > 0) {
-        // Merge with local state
-        const formattedOrders: Order[] = dbOrders.map((o) => ({
-          id: o.id,
-          ticket_number: o.ticket_number,
-          table_number: o.table_number,
-          guest_count: o.guest_count || 1,
-          status: o.status,
-          total_price: o.total_price,
-          is_paid: o.is_paid || false,
-          created_at: o.created_at,
-          updated_at: o.updated_at || o.created_at,
-          items: [
-            {
-              id: `det_${o.id}`,
-              menu_id: 'm1',
-              menu_name: 'カヌレ・ワッフルセット',
-              price: o.total_price || 400,
-              quantity: 1,
-              subtotal: o.total_price || 400,
-            },
-          ],
-        }));
+        const formattedOrders: Order[] = dbOrders.map((o) => {
+          let parsedItems: OrderDetailItem[] = [];
+          if (o.items_json && Array.isArray(o.items_json)) {
+            parsedItems = o.items_json;
+          } else {
+            parsedItems = [
+              {
+                id: `det_${o.id}`,
+                menu_id: 'm1',
+                menu_name: 'カヌレ・ワッフルセット',
+                price: o.total_price || 400,
+                quantity: 1,
+                subtotal: o.total_price || 400,
+              },
+            ];
+          }
+
+          return {
+            id: o.id,
+            ticket_number: o.ticket_number,
+            table_number: o.table_number,
+            guest_count: o.guest_count || 1,
+            status: o.status,
+            total_price: o.total_price,
+            is_paid: o.is_paid || false,
+            created_at: o.created_at,
+            updated_at: o.updated_at || o.created_at,
+            items: parsedItems,
+          };
+        });
 
         this.orders = formattedOrders;
         this.save('gm_orders', this.orders);
         this.notify();
       }
 
-      // Realtime listener
-      client
-        .channel('public:orders')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'orders' },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              const newRecord = payload.new;
-              if (!this.orders.some((o) => o.id === newRecord.id)) {
-                const newOrder: Order = {
-                  id: newRecord.id,
-                  ticket_number: newRecord.ticket_number,
-                  table_number: newRecord.table_number,
-                  guest_count: newRecord.guest_count || 1,
-                  status: newRecord.status,
-                  total_price: newRecord.total_price,
-                  is_paid: newRecord.is_paid || false,
-                  created_at: newRecord.created_at,
-                  updated_at: newRecord.updated_at || newRecord.created_at,
-                  items: [
-                    {
-                      id: `det_${newRecord.id}`,
-                      menu_id: 'm1',
-                      menu_name: 'カヌレ・ワッフルセット',
-                      price: newRecord.total_price || 400,
-                      quantity: 1,
-                      subtotal: newRecord.total_price || 400,
-                    },
-                  ],
-                };
-                this.orders = [newOrder, ...this.orders];
-                this.save('gm_orders', this.orders);
+      if (!this.isSupabaseSubscribed) {
+        client
+          .channel('public:orders')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'orders' },
+            (payload) => {
+              if (payload.eventType === 'INSERT') {
+                const newRecord = payload.new;
+                if (!this.orders.some((o) => o.id === newRecord.id)) {
+                  let parsedItems: OrderDetailItem[] = [];
+                  if (newRecord.items_json && Array.isArray(newRecord.items_json)) {
+                    parsedItems = newRecord.items_json;
+                  } else {
+                    parsedItems = [
+                      {
+                        id: `det_${newRecord.id}`,
+                        menu_id: 'm1',
+                        menu_name: 'カヌレ・ワッフルセット',
+                        price: newRecord.total_price || 400,
+                        quantity: 1,
+                        subtotal: newRecord.total_price || 400,
+                      },
+                    ];
+                  }
 
-                if (this.settings.enableSound) {
-                  soundEffects.playNewOrderSound();
+                  const newOrder: Order = {
+                    id: newRecord.id,
+                    ticket_number: newRecord.ticket_number,
+                    table_number: newRecord.table_number,
+                    guest_count: newRecord.guest_count || 1,
+                    status: newRecord.status,
+                    total_price: newRecord.total_price,
+                    is_paid: newRecord.is_paid || false,
+                    created_at: newRecord.created_at,
+                    updated_at: newRecord.updated_at || newRecord.created_at,
+                    items: parsedItems,
+                  };
+
+                  this.orders = [newOrder, ...this.orders];
+                  this.save('gm_orders', this.orders);
+
+                  if (this.settings.enableSound) {
+                    soundEffects.playNewOrderSound();
+                  }
+
+                  this.notify();
                 }
-
+              } else if (payload.eventType === 'UPDATE') {
+                const updatedRecord = payload.new;
+                this.orders = this.orders.map((o) =>
+                  o.id === updatedRecord.id
+                    ? {
+                        ...o,
+                        status: updatedRecord.status,
+                        is_paid: updatedRecord.is_paid,
+                      }
+                    : o
+                );
+                this.save('gm_orders', this.orders);
                 this.notify();
               }
-            } else if (payload.eventType === 'UPDATE') {
-              const updatedRecord = payload.new;
-              this.orders = this.orders.map((o) =>
-                o.id === updatedRecord.id
-                  ? {
-                      ...o,
-                      status: updatedRecord.status,
-                      is_paid: updatedRecord.is_paid,
-                    }
-                  : o
-              );
-              this.save('gm_orders', this.orders);
-              this.notify();
             }
-          }
-        )
-        .subscribe();
+          )
+          .subscribe();
 
-      this.isSupabaseSubscribed = true;
-    } catch (e) {
+        this.isSupabaseSubscribed = true;
+      }
+    } catch (e: any) {
+      this.lastSupabaseError = `接続例外: ${e.message || e}`;
       console.error('Supabase Realtime Sync Error:', e);
+      this.notify();
     }
   }
 
@@ -475,7 +505,7 @@ export class LocalStoreManager {
     try {
       const client = getSupabaseClient();
       if (client) {
-        await client.from('orders').insert({
+        const { error } = await client.from('orders').insert({
           id: order.id,
           ticket_number: order.ticket_number,
           table_number: order.table_number,
@@ -483,11 +513,22 @@ export class LocalStoreManager {
           status: order.status,
           total_price: order.total_price,
           is_paid: order.is_paid,
+          items_json: order.items,
           created_at: order.created_at,
         });
+
+        if (error) {
+          this.lastSupabaseError = `注文送信エラー: ${error.message} (コード:${error.code})`;
+          console.error(this.lastSupabaseError);
+          this.notify();
+        } else {
+          this.lastSupabaseError = null;
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
+      this.lastSupabaseError = `注文送信例外: ${e.message || e}`;
       console.error('Failed to sync order to Supabase:', e);
+      this.notify();
     }
   }
 
@@ -504,10 +545,60 @@ export class LocalStoreManager {
         if (isPaid !== undefined) payload.is_paid = isPaid;
         if (cashReceived !== undefined) payload.cash_received = cashReceived;
 
-        await client.from('orders').update(payload).eq('id', orderId);
+        const { error } = await client.from('orders').update(payload).eq('id', orderId);
+        if (error) {
+          this.lastSupabaseError = `ステータス更新エラー: ${error.message}`;
+          console.error(this.lastSupabaseError);
+          this.notify();
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
+      this.lastSupabaseError = `ステータス更新例外: ${e.message || e}`;
       console.error('Failed to update order status in Supabase:', e);
+      this.notify();
+    }
+  }
+
+  public async testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
+    const client = getSupabaseClient();
+    if (!client) {
+      return {
+        success: false,
+        message: 'SupabaseのURLまたはKeyが設定されていません。',
+      };
+    }
+
+    try {
+      // Test read query
+      const { data, error } = await client.from('orders').select('id').limit(1);
+
+      if (error) {
+        if (error.code === '42P01') {
+          return {
+            success: false,
+            message: 'ordersテーブルが存在しません。付属のSQLをSupabase SQL Editorで実行してください。',
+          };
+        } else if (error.code === '42501' || error.message.includes('row-level security')) {
+          return {
+            success: false,
+            message: 'RLS (アクセス権限) によりブロックされています。SQLの 「ALTER TABLE orders DISABLE ROW LEVEL SECURITY;」 を実行してください。',
+          };
+        }
+        return {
+          success: false,
+          message: `エラー (${error.code}): ${error.message}`,
+        };
+      }
+
+      return {
+        success: true,
+        message: `接続成功！データベース (ordersテーブル) に正常にアクセスできます。(データ件数: ${data?.length || 0}件)`,
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: `通信エラー: ${e.message || e}`,
+      };
     }
   }
 }
