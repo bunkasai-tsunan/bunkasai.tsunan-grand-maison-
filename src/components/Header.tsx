@@ -1,6 +1,6 @@
 import React from 'react';
 import { RoleMode } from '../types/store';
-import { Utensils, ChefHat, Database, Lock, ShieldAlert } from 'lucide-react';
+import { Utensils, ChefHat, Database, Lock, Link, QrCode } from 'lucide-react';
 
 interface HeaderProps {
   currentRole: RoleMode;
@@ -8,6 +8,7 @@ interface HeaderProps {
   selectedTable: number;
   onRequestChangeTable: () => void;
   onOpenSqlModal: () => void;
+  onOpenShareLinks: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   selectedTable,
   onRequestChangeTable,
   onOpenSqlModal,
+  onOpenShareLinks,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 text-zinc-900 px-4 py-3 shadow-sm">
@@ -38,12 +40,12 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <p className="text-[11px] text-zinc-500 flex items-center gap-1.5 font-medium">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                オンライン同期中
+                サーバーリアルタイム通信中
               </p>
             </div>
           </div>
 
-          {/* Table Pill (Customer View) - Click triggers PIN prompt */}
+          {/* Table Pill */}
           {currentRole === 'customer' && (
             <button
               onClick={onRequestChangeTable}
@@ -57,22 +59,32 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Right Side: Account / Role Switcher */}
+        {/* Right Actions */}
         <div className="flex items-center gap-2">
           
-          {/* SQL Button visible ONLY in Staff/Kitchen View! */}
+          {/* Share Links / Split Page Helper Button */}
+          <button
+            onClick={onOpenShareLinks}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-xs"
+            title="専用ページURL（リンク分けた運用案内）"
+          >
+            <Link className="w-3.5 h-3.5 text-slate-700" />
+            <span className="hidden md:inline">専用リンク案内</span>
+          </button>
+
+          {/* SQL Button in Staff View */}
           {currentRole === 'kitchen' && (
             <button
               onClick={onOpenSqlModal}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-xs"
-              title="Supabase SQLとNext.js実装ガイドを表示"
+              title="Supabase SQLガイドを表示"
             >
               <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Supabase SQL</span>
+              <span>SQL</span>
             </button>
           )}
 
-          {/* Account Mode Switcher */}
+          {/* Account Role Switcher */}
           <div className="flex items-center p-1 bg-zinc-100 border border-zinc-200 rounded-2xl shadow-inner">
             <button
               onClick={() => onSelectRole('customer')}
@@ -83,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Utensils className="w-3.5 h-3.5" />
-              <span className="whitespace-nowrap">客用画面</span>
+              <span className="whitespace-nowrap">客用</span>
             </button>
 
             <button
@@ -95,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <ChefHat className="w-3.5 h-3.5 text-amber-400" />
-              <span className="whitespace-nowrap">店員用画面</span>
+              <span className="whitespace-nowrap">店員用</span>
               <Lock className="w-3 h-3 text-zinc-400" />
             </button>
           </div>

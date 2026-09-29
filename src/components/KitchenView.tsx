@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { MenuItem, ToppingOption, Order, OrderStatus, StoreSettings } from '../types/store';
 import { store } from '../lib/store';
-import { getSupabaseUrlAndKey, saveSupabaseConfig } from '../lib/supabaseClient';
 import {
   ChefHat,
   Receipt,
@@ -15,11 +14,9 @@ import {
   Sliders,
   Database,
   Users,
-  Key,
-  Check,
+  Activity,
   Link,
-  ShieldAlert,
-  Activity
+  QrCode
 } from 'lucide-react';
 
 interface KitchenViewProps {
@@ -48,13 +45,6 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
   // Settings State
   const [pinInput, setPinInput] = useState<string>(settings.pinCode);
 
-  // Supabase Config
-  const initialSupabaseConfig = getSupabaseUrlAndKey();
-  const [supabaseUrlInput, setSupabaseUrlInput] = useState<string>(initialSupabaseConfig.url);
-  const [supabaseKeyInput, setSupabaseKeyInput] = useState<string>(initialSupabaseConfig.key);
-  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
-  const [isTesting, setIsTesting] = useState<boolean>(false);
-
   const activeOrders = orders.filter((o) => {
     if (orderFilter === 'active') return o.status !== 'completed';
     if (orderFilter === 'all') return true;
@@ -80,41 +70,10 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
     setShowReceipt(true);
   };
 
-  const handleSaveAndTestSupabase = async () => {
-    saveSupabaseConfig(supabaseUrlInput, supabaseKeyInput);
-    setIsTesting(true);
-    setTestResult(null);
-
-    const res = await store.testSupabaseConnection();
-    setIsTesting(false);
-    setTestResult(res);
-
-    store.updateSettings({});
-  };
-
   return (
     <div className="min-h-[calc(100vh-65px)] bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Diagnostics Alert Bar if Supabase Error occurs */}
-      {store.lastSupabaseError && (
-        <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 flex items-start justify-between gap-3 text-rose-900 text-xs shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2 font-bold">
-            <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
-            <div>
-              <p className="text-sm font-black">Supabase 接続警告</p>
-              <p className="mt-0.5">{store.lastSupabaseError}</p>
-            </div>
-          </div>
-          <button
-            onClick={onOpenSqlModal}
-            className="px-3 py-1.5 bg-rose-600 text-white font-black rounded-xl hover:bg-rose-700 whitespace-nowrap shadow-xs"
-          >
-            解決用SQLを見る
-          </button>
-        </div>
-      )}
-
-      {/* Top Admin Control Bar */}
+      {/* Top Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 p-4 sm:p-5 rounded-3xl shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-black text-white font-black flex items-center justify-center shadow-md">
@@ -190,7 +149,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
-            <span>設定・DB接続</span>
+            <span>設定</span>
           </button>
         </div>
       </div>
@@ -221,8 +180,9 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
               ))}
             </div>
 
-            <div className="text-xs text-slate-500 font-mono font-bold">
-              表示件数: <span className="text-slate-900">{activeOrders.length}件</span>
+            <div className="text-xs text-slate-500 font-mono font-bold flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>自動受信アクティブ: {activeOrders.length}件</span>
             </div>
           </div>
 
@@ -230,7 +190,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
             <div className="bg-white border border-slate-200 rounded-3xl py-16 text-center text-slate-400 space-y-2 shadow-xs">
               <Clock className="w-8 h-8 mx-auto text-slate-300" />
               <p className="text-sm font-bold text-slate-600">該当する注文はありません</p>
-              <p className="text-xs text-slate-400">客用タブレットから新規注文が入るとここに表示されます</p>
+              <p className="text-xs text-slate-400">客用タブレット・スマホから送信されるとリアルタイムでここに届きます</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -631,98 +591,10 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: SETTINGS & SUPABASE CONFIG WITH DIAGNOSTICS */}
+      {/* TAB 4: SETTINGS */}
       {activeTab === 'settings' && (
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-200">
           
-          <div className="bg-white border border-emerald-300 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl font-bold">
-                  <Link className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">Supabase データベース接続設定＆テスト</h3>
-                  <p className="text-xs text-slate-500">ステップ2で取得したURLとAnon Keyを貼り付けて接続テストできます</p>
-                </div>
-              </div>
-              <button
-                onClick={onOpenSqlModal}
-                className="text-xs text-emerald-700 hover:text-emerald-900 underline font-bold"
-              >
-                SQLを見る
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  1. Supabase Project URL
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://your-project.supabase.co"
-                  value={supabaseUrlInput}
-                  onChange={(e) => setSupabaseUrlInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono text-xs rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-black outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  2. Supabase Anon API Key
-                </label>
-                <input
-                  type="password"
-                  placeholder="eyJhbGciOiJIUzI1NiIsIn..."
-                  value={supabaseKeyInput}
-                  onChange={(e) => setSupabaseKeyInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono text-xs rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-black outline-none"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <button
-                  onClick={handleSaveAndTestSupabase}
-                  disabled={isTesting}
-                  className="px-5 py-2.5 bg-black hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 transition-all active:scale-95"
-                >
-                  <Activity className="w-4 h-4 text-emerald-400 animate-spin" />
-                  <span>{isTesting ? '接続テスト中...' : '設定を保存して接続テストを実行'}</span>
-                </button>
-              </div>
-
-              {/* Test Result Display */}
-              {testResult && (
-                <div className={`p-4 rounded-2xl border text-xs font-bold space-y-1 ${
-                  testResult.success
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                    : 'bg-rose-50 border-rose-300 text-rose-900'
-                }`}>
-                  <p className="font-black text-sm">
-                    {testResult.success ? '🟢 接続成功！' : '🔴 接続エラー発生'}
-                  </p>
-                  <p className="text-xs leading-relaxed">{testResult.message}</p>
-
-                  {!testResult.success && testResult.message?.includes('RLS') && (
-                    <div className="mt-2 pt-2 border-t border-rose-200">
-                      <p className="font-black">💡 解決方法:</p>
-                      <p className="font-normal mt-0.5">
-                        Supabase SQL Editorで付属のSQLを全選択して「Run」を実行してください（RLS無効化処理が含まれています）。
-                      </p>
-                      <button
-                        onClick={onOpenSqlModal}
-                        className="mt-2 px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold"
-                      >
-                        SQLを表示してコピーする
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-4">
               <Settings className="w-5 h-5 text-slate-900" />

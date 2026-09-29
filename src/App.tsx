@@ -6,23 +6,47 @@ import { PinModal } from './components/PinModal';
 import { CustomerView } from './components/CustomerView';
 import { KitchenView } from './components/KitchenView';
 import { SupabaseSqlModal } from './components/SupabaseSqlModal';
+import { ShareLinksModal } from './components/ShareLinksModal';
 import { Utensils, X } from 'lucide-react';
 
 export default function App() {
   const [role, setRole] = useState<RoleMode>('customer');
   const [selectedTable, setSelectedTable] = useState<number>(1);
 
-  // Security Modals State
+  // Security & Link Modals State
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
   const [pinPurpose, setPinPurpose] = useState<'switch_role' | 'change_table'>('switch_role');
   const [isTablePickerOpen, setIsTablePickerOpen] = useState<boolean>(false);
   const [isSqlModalOpen, setIsSqlModalOpen] = useState<boolean>(false);
+  const [isShareLinksOpen, setIsShareLinksOpen] = useState<boolean>(false);
 
   // Synchronized store states
   const [menu, setMenu] = useState<MenuItem[]>(store.getMenu());
   const [toppings, setToppings] = useState<ToppingOption[]>(store.getToppings());
   const [orders, setOrders] = useState<Order[]>(store.getOrders());
   const [settings, setSettings] = useState<StoreSettings>(store.getSettings());
+
+  // Parse URL Parameters on Mount for Dedicated Customer / Kitchen Links
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const paramRole = params.get('role') || params.get('mode');
+      const paramTable = params.get('table');
+
+      if (paramRole === 'kitchen' || paramRole === 'staff' || window.location.pathname === '/kitchen') {
+        setRole('kitchen');
+      } else if (paramRole === 'customer') {
+        setRole('customer');
+      }
+
+      if (paramTable) {
+        const parsedT = parseInt(paramTable, 10);
+        if (parsedT >= 1 && parsedT <= 10) {
+          setSelectedTable(parsedT);
+        }
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = store.subscribe(() => {
@@ -34,7 +58,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Role switch request
   const handleSelectRole = (nextRole: RoleMode) => {
     if (nextRole === 'kitchen' && role !== 'kitchen') {
       setPinPurpose('switch_role');
@@ -44,13 +67,11 @@ export default function App() {
     }
   };
 
-  // Table change request (Requires PIN)
   const handleRequestChangeTable = () => {
     setPinPurpose('change_table');
     setIsPinModalOpen(true);
   };
 
-  // On successful PIN input
   const handlePinSuccess = () => {
     setIsPinModalOpen(false);
     if (pinPurpose === 'switch_role') {
@@ -70,9 +91,10 @@ export default function App() {
         selectedTable={selectedTable}
         onRequestChangeTable={handleRequestChangeTable}
         onOpenSqlModal={() => setIsSqlModalOpen(true)}
+        onOpenShareLinks={() => setIsShareLinksOpen(true)}
       />
 
-      {/* Active Views */}
+      {/* Main Active View */}
       <main>
         {role === 'customer' && (
           <CustomerView
@@ -95,7 +117,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Security PIN Authorization Modal */}
+      {/* PIN Modal */}
       <PinModal
         isOpen={isPinModalOpen}
         correctPin={settings.pinCode}
@@ -109,7 +131,7 @@ export default function App() {
         onClose={() => setIsPinModalOpen(false)}
       />
 
-      {/* Table Picker Modal (Unlocked after staff PIN authentication) */}
+      {/* Table Picker Modal */}
       {isTablePickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6">
@@ -159,10 +181,17 @@ export default function App() {
         </div>
       )}
 
-      {/* Supabase SQL & Next.js Guide Modal */}
+      {/* Supabase SQL Modal */}
       <SupabaseSqlModal
         isOpen={isSqlModalOpen}
         onClose={() => setIsSqlModalOpen(false)}
+      />
+
+      {/* Share Direct Links Modal */}
+      <ShareLinksModal
+        isOpen={isShareLinksOpen}
+        onClose={() => setIsShareLinksOpen(false)}
+        baseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
       />
 
     </div>
