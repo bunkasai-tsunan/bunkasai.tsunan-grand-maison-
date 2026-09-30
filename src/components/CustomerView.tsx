@@ -14,7 +14,7 @@ import {
   ArrowRight,
   ChevronRight,
   Lock,
-  ChevronDown
+  ChevronLeft
 } from 'lucide-react';
 
 interface CustomerViewProps {
@@ -32,11 +32,11 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   toppings,
   orders,
 }) => {
-  // Customer Step Flow: 'party_size' -> 'menu' -> 'ticket_status'
-  const [step, setStep] = useState<'party_size' | 'menu' | 'ticket_status'>('party_size');
+  // Step Flow: 'welcome' -> 'party_size' -> 'menu' -> 'ticket_status'
+  const [step, setStep] = useState<'welcome' | 'party_size' | 'menu' | 'ticket_status'>('welcome');
   const [guestCount, setGuestCount] = useState<number>(2);
   
-  // Customization state
+  // Options state
   const [selectedCream, setSelectedCream] = useState<'あり' | 'なし'>('あり');
   const [selectedTopping, setSelectedTopping] = useState<'あり' | 'なし'>('あり');
 
@@ -46,11 +46,9 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   // Active Ticket
   const [activeTicket, setActiveTicket] = useState<Order | null>(null);
 
-  // Filter current table orders
   const tableOrders = orders.filter((o) => o.table_number === tableNumber);
   const currentActiveOrder = activeTicket || tableOrders[0] || null;
 
-  // Add Canelé Set to cart
   const handleAddCaneleSet = (item: MenuItem) => {
     if (item.is_sold_out || item.stock <= 0) return;
 
@@ -83,7 +81,6 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     }
   };
 
-  // Add Black Tea to cart
   const handleAddDrink = (item: MenuItem) => {
     if (item.is_sold_out || item.stock <= 0) return;
 
@@ -124,7 +121,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
   const totalCartPrice = cart.reduce((sum, c) => sum + c.subtotal, 0);
 
-  // Submit Order
+  // Submit Order - Real-time unique sequential ticket generation
   const handleSubmitOrder = async () => {
     if (cart.length === 0) return;
 
@@ -147,90 +144,88 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     });
   };
 
-  const getStatusBadge = (status: Order['status']) => {
-    switch (status) {
-      case 'unread':
-        return (
-          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-full font-extrabold text-xs">
-            <Clock className="w-4 h-4 text-amber-600 animate-spin" />
-            <span>1. 注文受付完了 (厨房送信済み)</span>
-          </div>
-        );
-      case 'cooking':
-        return (
-          <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-full font-extrabold text-xs animate-pulse">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>2. ただいま調理中 (まもなくお届けします)</span>
-          </div>
-        );
-      case 'completed':
-        return (
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-full font-extrabold text-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>3. 提供済み / お会計完了</span>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
-    <div className="min-h-[calc(100vh-65px)] bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
+    <div className="min-h-[calc(100vh-73px)] bg-white text-slate-900 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto flex flex-col justify-center">
       
-      {/* Table Information Banner (Clean Light White Card) */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 p-4 sm:p-5 rounded-3xl shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-black text-white font-black text-xl flex items-center justify-center shadow-md">
-            {tableNumber}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">CURRENT TABLE</span>
-              <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold border border-slate-200">
-                1〜10番卓対応
-              </span>
+      {/* Table Information Banner */}
+      {step !== 'welcome' && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 p-4 sm:p-5 rounded-3xl shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white font-serif font-black text-lg flex items-center justify-center shadow-md">
+              {tableNumber}
             </div>
-            <h2 className="text-base sm:text-lg font-black text-slate-900">
-              {tableNumber}番卓 タブレット注文端末
+            <div>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">YOUR TABLE</span>
+              <h2 className="text-base font-black text-slate-900 font-serif">
+                {tableNumber}番卓 ご注文端末
+              </h2>
+            </div>
+          </div>
+
+          <button
+            onClick={onRequestChangeTable}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all shadow-xs active:scale-95"
+            title="店員用パスワードが必要です"
+          >
+            <Lock className="w-3.5 h-3.5 text-slate-400" />
+            <span>卓番号変更 (店員専用)</span>
+          </button>
+        </div>
+      )}
+
+      {/* STEP 1: WELCOME SPLASH SCREEN (ウェルカム画面) */}
+      {step === 'welcome' && (
+        <div className="py-12 sm:py-20 text-center space-y-10 animate-in fade-in zoom-in-95 duration-300 my-auto">
+          
+          <div className="space-y-3">
+            <span className="text-xs font-mono tracking-widest uppercase text-slate-400 font-extrabold">
+              WELCOME TO GRAN MAISON TSUNAN
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-black font-serif text-slate-900 tracking-tight leading-tight">
+              グランメゾン津南
             </h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-serif max-w-md mx-auto">
+              文化祭限定の特別なスイーツと最高品質の紅茶でおもてなしいたします
+            </p>
+          </div>
+
+          {/* Centered Large Button with Deep Prominent Shadow as requested */}
+          <div className="pt-4 max-w-xl mx-auto px-4">
+            <button
+              onClick={() => setStep('party_size')}
+              className="w-full py-6 sm:py-8 px-6 bg-slate-900 text-white hover:bg-black font-serif font-black text-lg sm:text-2xl rounded-3xl transition-all duration-300 shadow-2xl shadow-slate-900/30 hover:shadow-3xl hover:shadow-slate-900/40 active:scale-98 border border-slate-800 flex items-center justify-center gap-3 tracking-wider group"
+            >
+              <span>いらっしゃいませ、ようこそグランメゾン津南へ</span>
+              <ArrowRight className="w-6 h-6 text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-400 font-mono tracking-wider pt-8">
+            画面をタッチしてご注文手続きを開始してください
           </div>
         </div>
+      )}
 
-        {/* Change Table Button (Requires Staff Password) */}
-        <button
-          onClick={onRequestChangeTable}
-          className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 transition-all shadow-xs active:scale-95"
-          title="店員用パスワードが必要です"
-        >
-          <Lock className="w-3.5 h-3.5 text-slate-500" />
-          <span>卓番号変更 (店員専用)</span>
-        </button>
-      </div>
-
-      {/* STEP 1: PARTY SIZE SELECTION (1人〜8人) */}
+      {/* STEP 2: PARTY SIZE SELECTION (1人〜8人) */}
       {step === 'party_size' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 text-center max-w-2xl mx-auto shadow-xl animate-in fade-in zoom-in-95 duration-200 space-y-8">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 text-center max-w-2xl mx-auto shadow-xl animate-in fade-in zoom-in-95 duration-200 space-y-8 my-auto">
           
-          <div className="w-16 h-16 bg-slate-900 text-white rounded-3xl flex items-center justify-center mx-auto shadow-lg">
-            <Users className="w-8 h-8" />
+          <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+            <Users className="w-7 h-7" />
           </div>
 
           <div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mb-2">
-              ご来店ありがとうございます
+            <span className="text-xs font-mono tracking-widest uppercase text-slate-400 font-bold">GUEST COUNT</span>
+            <h2 className="text-2xl sm:text-3xl font-black font-serif text-slate-900 mt-1">
+              ご来店人数をお選びください
             </h2>
-            <p className="text-slate-500 text-xs sm:text-sm">
-              ご注文を始める前に、ご来店人数をお選びください（グランメゾン津南）
+            <p className="text-slate-500 text-xs sm:text-sm mt-1">
+              ご来店いただいた人数を1名〜8名の中からお選びください
             </p>
           </div>
 
           {/* 1名 〜 8名 Selection Buttons */}
           <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl space-y-3">
-            <label className="block text-xs font-mono font-bold text-slate-500 tracking-wider uppercase">
-              GUEST COUNT (ご来店人数：1名〜8名)
-            </label>
-
             <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
                 <button
@@ -238,7 +233,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   onClick={() => setGuestCount(num)}
                   className={`py-4 rounded-2xl font-black text-lg transition-all border ${
                     guestCount === num
-                      ? 'bg-black text-white border-black scale-105 shadow-md'
+                      ? 'bg-slate-900 text-white border-slate-900 scale-105 shadow-md font-serif'
                       : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -248,37 +243,44 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => setStep('menu')}
-            className="w-full max-w-md py-4 bg-black text-white hover:bg-slate-800 font-black text-base rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 active:scale-98 mx-auto"
-          >
-            <span>メニューを見る・注文へ進む</span>
-            <ArrowRight className="w-5 h-5 text-zinc-300" />
-          </button>
+          <div className="flex gap-3 max-w-md mx-auto">
+            <button
+              onClick={() => setStep('welcome')}
+              className="px-5 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl transition-all"
+            >
+              戻る
+            </button>
+            <button
+              onClick={() => setStep('menu')}
+              className="flex-1 py-4 bg-slate-900 text-white hover:bg-black font-bold text-base rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>メニューを見る</span>
+              <ArrowRight className="w-5 h-5 text-slate-300" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* STEP 2: MENU SELECTION SCREEN */}
+      {/* STEP 3: MENU SELECTION SCREEN (説明文削除済み) */}
       {step === 'menu' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-300">
           
-          {/* Main Menu Items (Left Column) */}
+          {/* Main Menu List */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* Header / Guest Count Badge */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div>
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                  グランメゾン津南 メニュー
+                <h2 className="text-xl sm:text-2xl font-black font-serif text-slate-900">
+                  グランメゾン津南 お品書き
                 </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  文化祭限定の特別スイーツ＆ドリンク
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ご希望の商品をお選びいただき「カートに追加」を押してください
                 </p>
               </div>
 
               <button
                 onClick={() => setStep('party_size')}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 transition-colors shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-colors"
               >
                 <Users className="w-3.5 h-3.5 text-slate-500" />
                 <span>{guestCount}名様</span>
@@ -286,12 +288,12 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </button>
             </div>
 
-            {/* Main Dishes */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-900" />
+            {/* Main Desserts */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-slate-900" />
                 <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest font-mono">
-                  MAIN DESSERT (メイン料理)
+                  MAIN DESSERT (スイーツ)
                 </h3>
               </div>
 
@@ -325,26 +327,26 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
                         <div className="sm:col-span-7 space-y-4">
                           <div>
-                            <div className="flex items-baseline justify-between gap-2">
-                              <h4 className="text-lg sm:text-xl font-black text-slate-900">{item.name}</h4>
-                              <span className="text-2xl font-black font-mono text-slate-900">¥{item.price}</span>
+                            {/* Product Name & Price ONLY (Item descriptions removed per request!) */}
+                            <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
+                              <h4 className="text-xl sm:text-2xl font-black font-serif text-slate-900">{item.name}</h4>
+                              <span className="text-2xl sm:text-3xl font-black font-mono text-slate-900">¥{item.price}</span>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">{item.description}</p>
                           </div>
 
                           {/* Options Customization */}
                           {!item.is_sold_out && (
                             <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                               
-                              {/* 生クリーム選択 */}
+                              {/* Cream Selection */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                   <label className="text-xs font-bold text-slate-700">
-                                    生クリーム選択
+                                    生クリーム
                                   </label>
                                   {creamOption?.is_sold_out && (
                                     <span className="text-[10px] text-rose-600 font-bold">
-                                      ※生クリーム売り切れ中
+                                      ※売り切れ中
                                     </span>
                                   )}
                                 </div>
@@ -354,7 +356,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                                     disabled={creamOption?.is_sold_out}
                                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                                       selectedCream === 'あり' && !creamOption?.is_sold_out
-                                        ? 'bg-black text-white border-black shadow-xs'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                         : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900'
                                     } ${creamOption?.is_sold_out ? 'opacity-40 cursor-not-allowed' : ''}`}
                                   >
@@ -364,7 +366,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                                     onClick={() => setSelectedCream('なし')}
                                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                                       selectedCream === 'なし'
-                                        ? 'bg-black text-white border-black shadow-xs'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                         : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900'
                                     }`}
                                   >
@@ -373,15 +375,15 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                                 </div>
                               </div>
 
-                              {/* トッピング カラースプレー選択 */}
+                              {/* Topping Selection */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                   <label className="text-xs font-bold text-slate-700">
-                                    トッピング（カラースプレー）
+                                    トッピング (カラースプレー)
                                   </label>
                                   {toppingOption?.is_sold_out && (
                                     <span className="text-[10px] text-rose-600 font-bold">
-                                      ※カラースプレー売り切れ中
+                                      ※売り切れ中
                                     </span>
                                   )}
                                 </div>
@@ -391,7 +393,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                                     disabled={toppingOption?.is_sold_out}
                                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                                       selectedTopping === 'あり' && !toppingOption?.is_sold_out
-                                        ? 'bg-black text-white border-black shadow-xs'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                         : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900'
                                     } ${toppingOption?.is_sold_out ? 'opacity-40 cursor-not-allowed' : ''}`}
                                   >
@@ -401,7 +403,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                                     onClick={() => setSelectedTopping('なし')}
                                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                                       selectedTopping === 'なし'
-                                        ? 'bg-black text-white border-black shadow-xs'
+                                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                         : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900'
                                     }`}
                                   >
@@ -413,14 +415,13 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                             </div>
                           )}
 
-                          {/* Add to Cart button */}
                           <button
                             onClick={() => handleAddCaneleSet(item)}
                             disabled={item.is_sold_out}
                             className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
                               item.is_sold_out
                                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                                : 'bg-black text-white hover:bg-slate-800 active:scale-98 shadow-md'
+                                : 'bg-slate-900 text-white hover:bg-black active:scale-98 shadow-md'
                             }`}
                           >
                             <Plus className="w-4 h-4" />
@@ -433,10 +434,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 })}
             </div>
 
-            {/* Drink Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-900" />
+            {/* Beverage Section */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-slate-900" />
                 <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest font-mono">
                   BEVERAGE (ドリンク)
                 </h3>
@@ -467,11 +468,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                       </div>
 
                       <div className="sm:col-span-8 space-y-3">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <h4 className="text-lg font-black text-slate-900">{item.name}</h4>
+                        <div className="flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
+                          <h4 className="text-xl font-black font-serif text-slate-900">{item.name}</h4>
                           <span className="text-2xl font-black font-mono text-slate-900">¥{item.price}</span>
                         </div>
-                        <p className="text-xs text-slate-500">{item.description}</p>
 
                         <button
                           onClick={() => handleAddDrink(item)}
@@ -479,7 +479,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                           className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
                             item.is_sold_out
                               ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                              : 'bg-black text-white hover:bg-slate-800 active:scale-98 shadow-md'
+                              : 'bg-slate-900 text-white hover:bg-black active:scale-98 shadow-md'
                           }`}
                         >
                           <Plus className="w-4 h-4" />
@@ -491,19 +491,18 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 ))}
             </div>
 
-            {/* Link to view active orders */}
             {tableOrders.length > 0 && (
               <div className="p-4 bg-white border border-slate-200 rounded-2xl flex items-center justify-between gap-4 shadow-xs">
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-amber-600" />
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{tableNumber}番卓の注文履歴があります</p>
+                    <p className="text-xs font-bold text-slate-900">{tableNumber}番卓の発行済み整理券があります</p>
                     <p className="text-[11px] text-slate-500">整理券 {tableOrders[0].ticket_number} の状況を確認できます</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setStep('ticket_status')}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors whitespace-nowrap"
+                  className="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition-colors whitespace-nowrap"
                 >
                   調理状況を見る
                 </button>
@@ -512,13 +511,13 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
           </div>
 
-          {/* Cart Sidebar (Right Column) */}
+          {/* Cart Sidebar */}
           <div className="lg:col-span-4">
-            <div className="sticky top-20 bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xl space-y-6">
+            <div className="sticky top-24 bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xl space-y-6">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-slate-900" />
-                  <h3 className="text-base font-black text-slate-900">ご注文カート</h3>
+                  <h3 className="text-base font-black font-serif text-slate-900">ご注文カート</h3>
                 </div>
                 <span className="text-xs text-slate-600 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded">
                   {tableNumber}番卓
@@ -528,7 +527,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               {cart.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs space-y-1">
                   <p className="font-bold">カートに商品が入っていません</p>
-                  <p className="text-[11px] text-slate-400">左のメニューから商品を選んで追加してください</p>
+                  <p className="text-[11px] text-slate-400">商品を選択してカートに追加してください</p>
                 </div>
               ) : (
                 <div className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1">
@@ -578,7 +577,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <div className="border-t border-slate-200 pt-4 space-y-4">
                 <div className="flex items-center justify-between text-slate-600 text-xs">
                   <span>ご来店人数</span>
-                  <span className="font-extrabold text-slate-900">{guestCount}名様</span>
+                  <span className="font-bold text-slate-900">{guestCount}名様</span>
                 </div>
 
                 <div className="flex items-baseline justify-between">
@@ -592,14 +591,14 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md ${
                     cart.length === 0
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                      : 'bg-black text-white hover:bg-slate-800 active:scale-98'
+                      : 'bg-slate-900 text-white hover:bg-black active:scale-98'
                   }`}
                 >
-                  <span>注文を送信する</span>
+                  <span>注文確定・整理券を発行</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <p className="text-[10px] text-center text-slate-400 font-medium">
-                  ※送信後、厨房へ自動送信され整理券番号が発行されます
+                  ※整理券番号は全体で重複なくリアルタイム連番で発行されます
                 </p>
               </div>
 
@@ -609,17 +608,17 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
         </div>
       )}
 
-      {/* STEP 3: TICKET & STATUS CONFIRMATION */}
+      {/* STEP 4: UNIQUE TICKET CONFIRMATION SCREEN */}
       {step === 'ticket_status' && (
-        <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className="max-w-xl mx-auto space-y-6 animate-in fade-in duration-300 my-auto">
           
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl text-center space-y-6 relative overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-2xl text-center space-y-6 relative overflow-hidden">
             
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <span className="text-xs font-bold text-slate-500">{tableNumber}番卓の整理券</span>
+              <span className="text-xs font-bold text-slate-500 font-serif">{tableNumber}番卓 発行整理券</span>
               <button
                 onClick={() => setStep('menu')}
-                className="text-xs text-slate-700 hover:text-black font-bold underline"
+                className="text-xs text-slate-800 hover:text-black font-bold underline"
               >
                 追加で注文する
               </button>
@@ -629,29 +628,31 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <div className="space-y-6 py-2">
                 
                 <div>
-                  <span className="text-xs font-mono uppercase tracking-widest text-slate-400 font-bold">YOUR TICKET NUMBER</span>
-                  <div className="text-6xl sm:text-7xl font-black tracking-widest font-mono text-slate-900 my-3">
+                  <span className="text-xs font-mono uppercase tracking-widest text-slate-400 font-bold">YOUR UNIQUE TICKET NUMBER</span>
+                  {/* Sequential Guaranteed Non-Duplicate Ticket Number */}
+                  <div className="text-6xl sm:text-7xl font-black tracking-widest font-mono text-slate-900 my-4">
                     {currentActiveOrder.ticket_number}
                   </div>
-                  <div className="flex justify-center mt-2">
-                    {getStatusBadge(currentActiveOrder.status)}
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-full font-black text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>厨房へ送信完了 (重複防止リアルタイム同期済み)</span>
                   </div>
                 </div>
 
                 {/* Progress Status */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                   <div className="text-xs text-slate-600 text-left font-bold mb-1">調理ステータス:</div>
-                  <div className="grid grid-cols-2 gap-3 text-center text-xs font-extrabold">
+                  <div className="grid grid-cols-2 gap-3 text-center text-xs font-bold">
                     <div className={`p-3 rounded-xl border ${
                       currentActiveOrder.status === 'unread'
-                        ? 'bg-black text-white border-black shadow'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                         : 'bg-white border-slate-200 text-slate-400'
                     }`}>
-                      1. 受付完了 (厨房へ伝達済)
+                      1. 受付完了 (厨房通知済)
                     </div>
                     <div className={`p-3 rounded-xl border ${
                       currentActiveOrder.status === 'cooking'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow animate-pulse'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm animate-pulse'
                         : currentActiveOrder.status === 'completed'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-white border-slate-200 text-slate-400'

@@ -14,9 +14,9 @@ import {
   Sliders,
   Database,
   Users,
-  Activity,
-  Link,
-  QrCode
+  Edit3,
+  Save,
+  Check
 } from 'lucide-react';
 
 interface KitchenViewProps {
@@ -34,7 +34,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
   settings,
   onOpenSqlModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'pos' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu_edit' | 'inventory' | 'pos' | 'settings'>('orders');
   const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'unread' | 'cooking' | 'completed'>('active');
 
   // POS Cashier State
@@ -44,6 +44,13 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
 
   // Settings State
   const [pinInput, setPinInput] = useState<string>(settings.pinCode);
+
+  // Menu Edit State
+  const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editPrice, setEditPrice] = useState<number>(400);
+  const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
 
   const activeOrders = orders.filter((o) => {
     if (orderFilter === 'active') return o.status !== 'completed';
@@ -70,40 +77,54 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
     setShowReceipt(true);
   };
 
+  const startEditMenu = (item: MenuItem) => {
+    setEditingMenuId(item.id);
+    setEditName(item.name);
+    setEditDescription(item.description || '');
+    setEditPrice(item.price);
+  };
+
+  const handleSaveMenuEdit = (id: string) => {
+    store.editMenuItem(id, editName, editDescription, editPrice);
+    setEditingMenuId(null);
+    setSavedSuccessId(id);
+    setTimeout(() => setSavedSuccessId(null), 2500);
+  };
+
   return (
     <div className="min-h-[calc(100vh-65px)] bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Top Control Bar */}
+      {/* Top Admin Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 p-4 sm:p-5 rounded-3xl shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-black text-white font-black flex items-center justify-center shadow-md">
-            <ChefHat className="w-6 h-6 text-amber-400" />
+            <ChefHat className="w-6 h-6 text-amber-300" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-black text-slate-900">
+              <h2 className="text-base sm:text-lg font-black font-serif text-slate-900">
                 厨房・レジ管理コンソール (店員用)
               </h2>
               <button
                 onClick={onOpenSqlModal}
                 className="flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[11px] font-bold hover:bg-emerald-100 transition-colors"
-                title="Supabase SQLとNext.jsコードガイド"
+                title="Supabase SQLガイド"
               >
                 <Database className="w-3 h-3 text-emerald-600" />
-                <span>SQLガイド</span>
+                <span>SQL</span>
               </button>
             </div>
-            <p className="text-xs text-slate-500">リアルタイム注文受信 / 在庫・トッピング管理 / POSレジ</p>
+            <p className="text-xs text-slate-500">注文受信 / メニュー・説明文編集 / 在庫管理 / POSレジ</p>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center p-1 bg-slate-100 border border-slate-200 rounded-2xl">
+        <div className="flex items-center p-1 bg-slate-100 border border-slate-200 rounded-2xl overflow-x-auto">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'orders'
-                ? 'bg-black text-white shadow-md'
+                ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -117,22 +138,34 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('menu_edit')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'menu_edit'
+                ? 'bg-slate-900 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>メニュー・説明文編集</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('inventory')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'inventory'
-                ? 'bg-black text-white shadow-md'
+                ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            <span>在庫・トッピング</span>
+            <span>在庫管理</span>
           </button>
 
           <button
             onClick={() => setActiveTab('pos')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'pos'
-                ? 'bg-black text-white shadow-md'
+                ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -142,9 +175,9 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'settings'
-                ? 'bg-black text-white shadow-md'
+                ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -171,7 +204,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                   onClick={() => setOrderFilter(filter.id as any)}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                     orderFilter === filter.id
-                      ? 'bg-black text-white shadow-xs'
+                      ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -211,7 +244,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                         <span className="text-2xl font-black font-mono text-slate-900">
                           {order.ticket_number}
                         </span>
-                        <span className="px-2.5 py-1 bg-black text-white font-black text-xs rounded-lg">
+                        <span className="px-2.5 py-1 bg-slate-900 text-white font-black text-xs rounded-lg">
                           {order.table_number}番卓
                         </span>
                         <span className="text-xs font-bold text-slate-600 flex items-center gap-0.5">
@@ -300,12 +333,124 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         </div>
       )}
 
-      {/* TAB 2: INVENTORY */}
+      {/* TAB 2: MENU & DESCRIPTION EDITING (スタッフ用メニュー・説明文編集機能) */}
+      {activeTab === 'menu_edit' && (
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+            <div>
+              <h3 className="text-lg font-black font-serif text-slate-900 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-slate-900" />
+                <span>メニュー名・説明文のリアルタイム編集</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                ここで編集保存した内容（料理名、価格、説明文）はデータベースに反映され、必要に応じていつでも更新できます。
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {menu.map((item) => {
+                const isEditing = editingMenuId === item.id;
+                const isSaved = savedSuccessId === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-slate-50 border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4"
+                  >
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-14 h-14 rounded-xl object-cover border border-slate-200"
+                        />
+                        <div>
+                          <h4 className="text-base font-black font-serif text-slate-900">{item.name}</h4>
+                          <p className="text-xs font-mono font-bold text-slate-600">現在価格: ¥{item.price}</p>
+                        </div>
+                      </div>
+
+                      {!isEditing ? (
+                        <button
+                          onClick={() => startEditMenu(item)}
+                          className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>編集する</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSaveMenuEdit(item.id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>変更を保存</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            料理名（メニュー名）
+                          </label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            販売価格 (税込)
+                          </label>
+                          <input
+                            type="number"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(Number(e.target.value))}
+                            className="w-36 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            説明文（スタッフ管理用メモ・今後の表示用）
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-600 space-y-1">
+                        <p><span className="font-bold text-slate-800">スタッフ用説明文:</span> {item.description || '（なし）'}</p>
+                        {isSaved && (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-bold animate-pulse">
+                            <Check className="w-3.5 h-3.5" /> 変更を正常に保存しました
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: INVENTORY */}
       {activeTab === 'inventory' && (
         <div className="space-y-8 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <h3 className="text-lg font-black font-serif text-slate-900 flex items-center gap-2">
                 <Package className="w-5 h-5 text-slate-900" />
                 <span>メイン商品・ドリンクの在庫切り替え</span>
               </h3>
@@ -328,7 +473,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                         className="w-14 h-14 rounded-xl object-cover border border-slate-200 shadow-xs"
                       />
                       <div>
-                        <h4 className="text-base font-black text-slate-900">{item.name}</h4>
+                        <h4 className="text-base font-black font-serif text-slate-900">{item.name}</h4>
                         <span className="text-xs font-mono font-bold text-slate-600">¥{item.price}</span>
                       </div>
                     </div>
@@ -382,7 +527,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
 
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <h3 className="text-lg font-black font-serif text-slate-900 flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-slate-900" />
                 <span>トッピング・オプションの在庫切り替え</span>
               </h3>
@@ -399,7 +544,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h4 className="text-base font-black text-slate-900">{top.name}</h4>
+                      <h4 className="text-base font-black font-serif text-slate-900">{top.name}</h4>
                       <p className="text-xs text-slate-500 mt-0.5">対象: カヌレ・ワッフルセット</p>
                     </div>
 
@@ -440,11 +585,11 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: POS CASHIER */}
+      {/* TAB 4: POS CASHIER */}
       {activeTab === 'pos' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-200">
           <div className="lg:col-span-5 space-y-4">
-            <h3 className="text-base font-black text-slate-900 flex items-center justify-between">
+            <h3 className="text-base font-black font-serif text-slate-900 flex items-center justify-between">
               <span>未会計の注文一覧</span>
               <span className="text-xs font-mono font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded">
                 {orders.filter((o) => !o.is_paid).length}件
@@ -465,7 +610,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                       onClick={() => setSelectedPosOrderId(order.id)}
                       className={`w-full text-left p-4 rounded-2xl border transition-all ${
                         selectedPosOrder?.id === order.id
-                          ? 'bg-black text-white border-black shadow-lg scale-[1.01]'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-lg scale-[1.01]'
                           : 'bg-white text-slate-900 border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -473,7 +618,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-black text-lg">{order.ticket_number}</span>
                           <span className={`px-2 py-0.5 rounded text-xs font-black ${
-                            selectedPosOrder?.id === order.id ? 'bg-white text-black' : 'bg-slate-100 text-slate-800'
+                            selectedPosOrder?.id === order.id ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-800'
                           }`}>
                             {order.table_number}番卓
                           </span>
@@ -497,7 +642,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                 <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-mono text-slate-400 uppercase font-bold">POS CHECKOUT</span>
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-black font-serif text-slate-900">
                       {selectedPosOrder.ticket_number} ({selectedPosOrder.table_number}番卓) のお会計
                     </h3>
                   </div>
@@ -572,7 +717,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                   disabled={cashReceived < selectedPosOrder.total_price}
                   className={`w-full py-4 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-md ${
                     cashReceived >= selectedPosOrder.total_price
-                      ? 'bg-black text-white hover:bg-slate-800 active:scale-98'
+                      ? 'bg-slate-900 text-white hover:bg-black active:scale-98'
                       : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                   }`}
                 >
@@ -591,12 +736,12 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: SETTINGS */}
+      {/* TAB 5: SETTINGS */}
       {activeTab === 'settings' && (
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-200">
           
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-4">
+            <h3 className="text-lg font-black font-serif text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-4">
               <Settings className="w-5 h-5 text-slate-900" />
               <span>グランメゾン津南 システム設定</span>
             </h3>
@@ -615,7 +760,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                 />
                 <button
                   onClick={() => store.updateSettings({ pinCode: pinInput })}
-                  className="px-4 py-2.5 bg-black text-white hover:bg-slate-800 font-bold text-xs rounded-xl transition-all"
+                  className="px-4 py-2.5 bg-slate-900 text-white hover:bg-black font-bold text-xs rounded-xl transition-all"
                 >
                   保存する
                 </button>
@@ -632,14 +777,14 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
                 type="checkbox"
                 checked={settings.enableSound}
                 onChange={(e) => store.updateSettings({ enableSound: e.target.checked })}
-                className="w-5 h-5 accent-black cursor-pointer"
+                className="w-5 h-5 accent-slate-900 cursor-pointer"
               />
             </div>
 
             <div className="pt-6 border-t border-slate-200 space-y-2">
               <span className="text-xs font-bold text-rose-600 block">データの初期化</span>
               <p className="text-xs text-slate-500">
-                注文履歴や在庫数を初期状態にリセットします。
+                注文履歴や整理券番号をリセットします。
               </p>
               <button
                 onClick={() => {
@@ -665,7 +810,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl p-6 sm:p-8 max-w-sm w-full space-y-6 shadow-2xl font-mono">
             <div className="text-center space-y-1">
-              <h3 className="font-black text-xl tracking-tight">グランメゾン津南</h3>
+              <h3 className="font-black font-serif text-xl tracking-tight">グランメゾン津南</h3>
               <p className="text-xs text-slate-500">文化祭 レジお買上領収書</p>
               <p className="text-[10px] text-slate-400 mt-2">
                 {new Date().toLocaleString('ja-JP')}
@@ -702,7 +847,7 @@ export const KitchenView: React.FC<KitchenViewProps> = ({
 
             <button
               onClick={() => setShowReceipt(false)}
-              className="w-full py-3 bg-black text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
+              className="w-full py-3 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-black transition-colors"
             >
               閉じる
             </button>

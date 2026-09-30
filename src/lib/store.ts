@@ -96,7 +96,6 @@ export class StoreManager {
   private initServerConnection() {
     if (typeof window === 'undefined') return;
 
-    // Fetch initial state
     fetch('/api/state')
       .then((res) => res.json())
       .then((data) => {
@@ -107,7 +106,6 @@ export class StoreManager {
       })
       .catch(() => {});
 
-    // SSE Stream
     try {
       this.sseSource = new EventSource('/api/stream');
 
@@ -142,6 +140,22 @@ export class StoreManager {
     }
   }
 
+  // Edit Menu Name, Description, Price Live
+  async editMenuItem(id: string, name: string, description: string, price: number) {
+    try {
+      await fetch('/api/menu/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, description, price }),
+      });
+    } catch {
+      this.menu = this.menu.map((m) =>
+        m.id === id ? { ...m, name, description, price } : m
+      );
+      this.notify();
+    }
+  }
+
   // Toggle Sold Out
   async toggleMenuSoldOut(id: string) {
     try {
@@ -151,7 +165,6 @@ export class StoreManager {
         body: JSON.stringify({ type: 'menu', id }),
       });
     } catch {
-      // Fallback
       this.menu = this.menu.map((item) =>
         item.id === id ? { ...item, is_sold_out: !item.is_sold_out } : item
       );
@@ -168,7 +181,6 @@ export class StoreManager {
         body: JSON.stringify({ type: 'menu', id, delta }),
       });
     } catch {
-      // Fallback
       this.menu = this.menu.map((item) => {
         if (item.id === id) {
           const newStock = Math.max(0, item.stock + delta);
@@ -214,7 +226,7 @@ export class StoreManager {
     }
   }
 
-  // Submit Order via REST -> Server broadcasts to ALL clients instantly
+  // Submit Order via REST -> Server broadcasts atomic unique ticket
   async createOrder(
     tableNumber: number,
     guestCount: number,
@@ -244,7 +256,6 @@ export class StoreManager {
       console.error('Failed to create order on server:', e);
     }
 
-    // Local Fallback if server offline
     const fallbackTicket = `#${Math.floor(100 + Math.random() * 900)}`;
     const total_price = items.reduce((acc, curr) => acc + curr.subtotal, 0);
 

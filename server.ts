@@ -59,74 +59,11 @@ let toppings = [
   },
 ];
 
-let orders: any[] = [
-  {
-    id: 'ord_101',
-    ticket_number: '#001',
-    table_number: 3,
-    guest_count: 2,
-    status: 'completed',
-    total_price: 900,
-    created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    is_paid: true,
-    cash_received: 1000,
-    change_amount: 100,
-    items: [
-      {
-        id: 'detail_1',
-        menu_id: 'm1',
-        menu_name: 'カヌレ・ワッフルセット',
-        price: 400,
-        quantity: 2,
-        options: { cream: 'あり', topping: 'あり' },
-        subtotal: 800,
-      },
-      {
-        id: 'detail_2',
-        menu_id: 'm2',
-        menu_name: '紅茶',
-        price: 100,
-        quantity: 1,
-        subtotal: 100,
-      },
-    ],
-  },
-  {
-    id: 'ord_102',
-    ticket_number: '#002',
-    table_number: 5,
-    guest_count: 6,
-    status: 'cooking',
-    total_price: 1000,
-    created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    is_paid: false,
-    items: [
-      {
-        id: 'detail_3',
-        menu_id: 'm1',
-        menu_name: 'カヌレ・ワッフルセット',
-        price: 400,
-        quantity: 2,
-        options: { cream: 'あり', topping: 'なし' },
-        subtotal: 800,
-      },
-      {
-        id: 'detail_4',
-        menu_id: 'm2',
-        menu_name: '紅茶',
-        price: 100,
-        quantity: 2,
-        subtotal: 200,
-      },
-    ],
-  },
-];
+let orders: any[] = [];
 
-let ticketCounter = 3;
+// Global Atomic Ticket Counter for all customers (prevents duplicate tickets)
+let ticketCounter = 0;
 
-// Connected SSE clients for Server-Sent Events real-time broadcast
 const sseClients: express.Response[] = [];
 
 const broadcast = (data: any) => {
@@ -143,7 +80,7 @@ app.get('/api/stream', (req, res) => {
 
   sseClients.push(res);
 
-  // Send initial data snapshot
+  // Send initial snapshot
   res.write(`data: ${JSON.stringify({ type: 'INIT', orders, menu, toppings })}\n\n`);
 
   req.on('close', () => {
@@ -157,7 +94,7 @@ app.get('/api/state', (req, res) => {
   res.json({ orders, menu, toppings });
 });
 
-// POST new order
+// POST new order - Guaranteed Atomic Sequential Ticket Generation
 app.post('/api/orders', (req, res) => {
   ticketCounter += 1;
   const formattedTicket = `#${String(ticketCounter).padStart(3, '0')}`;
@@ -166,7 +103,7 @@ app.post('/api/orders', (req, res) => {
   const total_price = items.reduce((sum: number, i: any) => sum + i.subtotal, 0);
 
   const newOrder = {
-    id: `ord_${Date.now()}`,
+    id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     ticket_number: formattedTicket,
     table_number: Number(table_number) || 1,
     guest_count: Number(guest_count) || 1,
@@ -201,7 +138,7 @@ app.post('/api/orders', (req, res) => {
   res.json({ success: true, order: newOrder });
 });
 
-// PATCH update status or payment
+// PATCH update order status or payment
 app.patch('/api/orders/:id', (req, res) => {
   const { id } = req.params;
   const { status, is_paid, cash_received } = req.body;
@@ -222,6 +159,26 @@ app.patch('/api/orders/:id', (req, res) => {
 
   broadcast({ type: 'UPDATE_ORDER', orders });
   res.json({ success: true, orders });
+});
+
+// POST Edit Menu Item details (Name, Description, Price)
+app.post('/api/menu/edit', (req, res) => {
+  const { id, name, description, price } = req.body;
+
+  menu = menu.map((m) => {
+    if (m.id === id) {
+      return {
+        ...m,
+        name: name !== undefined ? name : m.name,
+        description: description !== undefined ? description : m.description,
+        price: price !== undefined ? Number(price) : m.price,
+      };
+    }
+    return m;
+  });
+
+  broadcast({ type: 'UPDATE_INVENTORY', menu, toppings });
+  res.json({ success: true, menu });
 });
 
 // Toggle Sold Out / Stock
@@ -258,13 +215,13 @@ app.post('/api/inventory/toggle', (req, res) => {
 
 // Reset data
 app.post('/api/reset', (req, res) => {
-  ticketCounter = 2;
+  ticketCounter = 0;
   orders = [];
   broadcast({ type: 'RESET', orders, menu, toppings });
   res.json({ success: true });
 });
 
-// Setup Vite middleware in dev or serve dist in prod
+// Setup Vite middleware
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
